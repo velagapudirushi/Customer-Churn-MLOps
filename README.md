@@ -6,7 +6,7 @@ An end-to-end, reproducible **Machine Learning Operations (MLOps)** system engin
 
 ## System Architecture
 
-![End-to-End Customer Churn MLOps Architecture](assets/architecture.jpg)
+![End-to-End Customer Churn MLOps Architecture](assets/architecture.svg)
 
 ---
 
