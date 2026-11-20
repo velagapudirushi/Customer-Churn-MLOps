@@ -1,5 +1,9 @@
 # End-to-End Customer Churn MLOps Pipeline (`DVC` + `Optuna` + `MLflow` + `Docker` + `AWS EC2`)
 
+[![Live Demo](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://customer-churn-mlops-1.streamlit.app/)
+
+🔗 **Live Deployed Application:** **[https://customer-churn-mlops-1.streamlit.app/](https://customer-churn-mlops-1.streamlit.app/)**
+
 An end-to-end, reproducible **Machine Learning Operations (MLOps)** system engineered on **440,832 customer records** (`~4.41 Lakhs`). The pipeline automatically detects the task type (**Classification vs. Regression**), performs leakage-free preprocessing via `ColumnTransformer`, runs **Optuna (`TPESampler`) Bayesian hyperparameter optimization** with **5-Fold Stratified Cross-Validation** across **7 classification algorithms**, logs all nested trials and `cloudpickle` model artifacts (`model.pkl` + `requirements.txt`) to the **MLflow Dashboard**, selects the production champion via a **Multi-Criteria Cost Gate** (Accuracy Gap + Model Size + Training Time + Prediction Latency), and packages an interactive **Streamlit** application into a lightweight **Docker** image for **AWS EC2** deployment.
 
 ---
