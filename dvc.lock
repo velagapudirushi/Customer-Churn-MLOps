@@ -1,0 +1,164 @@
+schema: '2.0'
+stages:
+  data_ingestion:
+    cmd: python src/data_ingestion.py
+    deps:
+    - path: data/raw/customer_churn.csv
+      hash: md5
+      md5: 6180899f2f2d5e68154c23f668fd2708
+      size: 30464688
+    - path: src/data_ingestion.py
+      hash: md5
+      md5: 5774da1cac19a8227f2fad561f09cd3a
+      size: 1399
+    outs:
+    - path: data/ingested/churn.csv
+      hash: md5
+      md5: 48e8278e2a01fa5bf8c3f3dc30aaa152
+      size: 25723738
+  data_preprocessing:
+    cmd: python src/data_preprocessing.py
+    deps:
+    - path: data/ingested/churn.csv
+      hash: md5
+      md5: 48e8278e2a01fa5bf8c3f3dc30aaa152
+      size: 25723738
+    - path: src/data_preprocessing.py
+      hash: md5
+      md5: 1f5805868cb2c1dbbd9cb8c7b06bcb9f
+      size: 1692
+    params:
+      params.yaml:
+        random_state: 42
+        test_size: 0.2
+    outs:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: e88c3139e0d62661ac1847eea693722b
+      size: 5144944
+    - path: data/processed/train.csv
+      hash: md5
+      md5: acb0fe79716bcdd790d36e88b51da0b8
+      size: 20578925
+  feature_engineering:
+    cmd: python src/feature_engineering.py
+    deps:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: e88c3139e0d62661ac1847eea693722b
+      size: 5144944
+    - path: data/processed/train.csv
+      hash: md5
+      md5: acb0fe79716bcdd790d36e88b51da0b8
+      size: 20578925
+    - path: src/feature_engineering.py
+      hash: md5
+      md5: 3e252e3d619bd5efecebe23c75834cff
+      size: 1927
+    outs:
+    - path: data/processed/X_test.csv
+      hash: md5
+      md5: 759fa2e04127463f043f2e17cb6a8710
+      size: 4968604
+    - path: data/processed/X_train.csv
+      hash: md5
+      md5: 4abe934530e965b7814f7106fa8b3642
+      size: 19873589
+    - path: data/processed/y_test.csv
+      hash: md5
+      md5: b136a275097aaf8d8e21f66dc3b5d2bd
+      size: 176340
+    - path: data/processed/y_train.csv
+      hash: md5
+      md5: 3b43bdd12b5285d1c8c827f6f71c553d
+      size: 705336
+  model_building:
+    cmd: python src/model_building.py
+    deps:
+    - path: data/processed/X_train.csv
+      hash: md5
+      md5: 4abe934530e965b7814f7106fa8b3642
+      size: 19873589
+    - path: data/processed/y_train.csv
+      hash: md5
+      md5: 3b43bdd12b5285d1c8c827f6f71c553d
+      size: 705336
+    - path: src/model_building.py
+      hash: md5
+      md5: caaadaaee4f82bbac103f261ba19717d
+      size: 25099
+    params:
+      params.yaml:
+        cv_folds: 5
+        experiment_name: Customer_Churn_DVC_Pipeline
+        measurement:
+          training_time_repeats: 3
+          prediction_n_samples: 50
+          prediction_repeats: 5
+        n_trials: 15
+        random_state: 42
+        selection:
+          max_accuracy_gap_pct: 5.0
+          accuracy_tolerance_pct: 1.0
+          weights:
+            model_size_mb: 0.4
+            training_time_seconds: 0.3
+            prediction_time_ms: 0.3
+          fallback_if_none_eligible: smallest_gap
+          gap_penalty_in_search: true
+          gap_penalty_weight: 1.0
+        tuning_sample_size: 25000
+    outs:
+    - path: models
+      hash: md5
+      md5: c8e6b3c6b530f12f94a8b983aa2ec174.dir
+      size: 14468360
+      nfiles: 8
+    - path: reports/model_comparison.csv
+      hash: md5
+      md5: 65b6254e932a0895d685ad600d4e2a54
+      size: 1122
+    - path: reports/model_comparison.md
+      hash: md5
+      md5: f1c2e161948c8d61c5ed1f26b72470d4
+      size: 1436
+    - path: reports/model_selection.json
+      hash: md5
+      md5: 86ee615a69f9c83af3e331c20973868b
+      size: 7472
+  model_evaluation:
+    cmd: python src/model_evaluation.py
+    deps:
+    - path: data/processed/X_test.csv
+      hash: md5
+      md5: 759fa2e04127463f043f2e17cb6a8710
+      size: 4968604
+    - path: data/processed/y_test.csv
+      hash: md5
+      md5: b136a275097aaf8d8e21f66dc3b5d2bd
+      size: 176340
+    - path: models
+      hash: md5
+      md5: c8e6b3c6b530f12f94a8b983aa2ec174.dir
+      size: 14468360
+      nfiles: 8
+    - path: reports/model_selection.json
+      hash: md5
+      md5: 86ee615a69f9c83af3e331c20973868b
+      size: 7472
+    - path: src/model_evaluation.py
+      hash: md5
+      md5: 680b9487f9f1cb073505c62c24189ac7
+      size: 5945
+    params:
+      params.yaml:
+        experiment_name: Customer_Churn_DVC_Pipeline
+    outs:
+    - path: reports/evaluation_details.json
+      hash: md5
+      md5: 69974944dabab121514c54c8d80b1397
+      size: 2698
+    - path: reports/metrics.json
+      hash: md5
+      md5: 1e139a53bba22f618a9a7b27a7e4720d
+      size: 443

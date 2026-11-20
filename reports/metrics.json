@@ -1,0 +1,15 @@
+{
+    "test_samples": 88167,
+    "test_accuracy": 0.999784,
+    "test_precision_macro": 0.999764,
+    "test_recall_macro": 0.999798,
+    "test_f1_macro": 0.999781,
+    "test_roc_auc": 0.999906,
+    "cv_validation_accuracy_pct": 99.872,
+    "cv_training_accuracy_pct": 99.976,
+    "cv_accuracy_gap_pct": 0.104,
+    "model_size_mb": 0.015971,
+    "training_time_seconds": 1.372979,
+    "prediction_time_ms": 2.262146,
+    "selection_cost": 0.0
+}

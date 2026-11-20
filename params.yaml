@@ -1,0 +1,22 @@
+test_size: 0.2
+random_state: 42
+cv_folds: 5
+n_trials: 15
+tuning_sample_size: 25000
+experiment_name: Customer_Churn_DVC_Pipeline
+
+selection:
+  max_accuracy_gap_pct: 5.0
+  accuracy_tolerance_pct: 1.0
+  weights:
+    model_size_mb: 0.4
+    training_time_seconds: 0.3
+    prediction_time_ms: 0.3
+  fallback_if_none_eligible: smallest_gap
+  gap_penalty_in_search: true
+  gap_penalty_weight: 1.0
+
+measurement:
+  training_time_repeats: 3
+  prediction_n_samples: 50
+  prediction_repeats: 5
