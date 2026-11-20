@@ -10,7 +10,6 @@ __pycache__
 *.pyc
 .DS_Store
 README.md
-assets/
 data/
 src/
 reports/
