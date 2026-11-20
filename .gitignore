@@ -12,7 +12,6 @@ mlflow.db
 .DS_Store
 .vscode/
 .idea/
-/data/raw/customer_churn.csv
 /data/ingested/
 /data/processed/
 /models/*
