@@ -1,4 +1,4 @@
-name: Build and Deploy Customer Churn MLOps to AWS EC2
+name: Build, Verify & Deploy Customer Churn MLOps (Docker + AWS EC2)
 
 on:
   push:
@@ -7,52 +7,84 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
   CONTAINER_NAME: customer-churn-mlops
 
 jobs:
   build-and-push:
-    name: Run DVC Pipeline, Build Docker Image & Push to AWS ECR
+    name: Build Docker Image, Smoke-Test Container & Push to AWS ECR
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build, Tag, and Push Docker Image to Amazon ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: latest
+      - name: Verify DVC Pipeline Artifacts & Champion Model
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          test -f dvc.yaml
+          test -f dvc.lock
+          test -f params.yaml
+          test -f models/model.pkl
+          test -f reports/metrics.json
+          echo "Verified champion model (models/model.pkl) and DVC metrics (reports/metrics.json)."
+
+      - name: Build Production Docker Image
+        run: |
+          docker build -t customer-churn-mlops:latest .
+
+      - name: Smoke-Test Docker Container & Streamlit Health Endpoint
+        run: |
+          docker run -d --name ${{ env.CONTAINER_NAME }}-test -p 8501:8501 customer-churn-mlops:latest
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:8501/_stcore/health >/dev/null; then
+              echo "Streamlit container healthcheck passed on port 8501!"
+              docker stop ${{ env.CONTAINER_NAME }}-test
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs ${{ env.CONTAINER_NAME }}-test
+          exit 1
+
+      - name: Push Image to Amazon ECR (When AWS Secrets Are Configured)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_REGION" ] || [ -z "$AWS_ACCOUNT_ID" ] || [ -z "$ECR_REPOSITORY" ]; then
+            echo "AWS ECR secrets not configured yet — skipping ECR push (Docker build & container healthcheck succeeded)."
+            exit 0
+          fi
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+          docker tag customer-churn-mlops:latest "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest"
+          docker push "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest"
 
   deploy-to-ec2:
     name: Pull & Run Container on AWS EC2
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy Docker Container via SSH to EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-            docker pull ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:latest
-            docker stop ${{ env.CONTAINER_NAME }} || true
-            docker rm ${{ env.CONTAINER_NAME }} || true
-            docker run -d --name ${{ env.CONTAINER_NAME }} --restart always -p 8501:8501 ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:latest
-            docker image prune -f
+      - name: Deploy Docker Container to AWS EC2 (When EC2 Secrets Are Configured)
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+        run: |
+          if [ -z "$EC2_HOST" ] || [ -z "$EC2_USER" ] || [ -z "$EC2_SSH_KEY" ]; then
+            echo "AWS EC2 SSH secrets not configured yet — skipping remote EC2 deployment."
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          echo "$EC2_SSH_KEY" > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem "$EC2_USER@$EC2_HOST" "
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com &&
+            docker pull $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest &&
+            (docker stop ${{ env.CONTAINER_NAME }} || true) &&
+            (docker rm ${{ env.CONTAINER_NAME }} || true) &&
+            docker run -d --name ${{ env.CONTAINER_NAME }} --restart always -p 8501:8501 $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
+          "
