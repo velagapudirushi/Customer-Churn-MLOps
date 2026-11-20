@@ -6,70 +6,7 @@ An end-to-end, reproducible **Machine Learning Operations (MLOps)** system engin
 
 ## System Architecture
 
-```text
-========================================================================================================================
-                     CUSTOMER CHURN MLOPS ARCHITECTURE (with DVC, Optuna & MLflow)
-     Automated task detection, hyperparameter tuning, multi-criteria champion gating, and containerized deployment.
-========================================================================================================================
-
-                                  +-----------------------------------------------------------------------+
-                                  |  5-STAGE DVC & MLFLOW PIPELINE (dvc.yaml + params.yaml Orchestrated)  |
-                                  |                                                                       |
-+---------------+   +-----------+ |  +--------------------+    +--------------------+    +--------------+ |
-| (1) Raw Data  |   | (2) Task  | |  | (3) Optuna Search  |    | (4) Overfitting    |    | (7) Select   | |
-|               |   |   Router  | |  |   (7 Classifiers)  |    |   Gate (< 5% Gap)  |    |   Champion   | |
-|  440,832 Rows |-->|           |-+->|                    |--->|                    |--->|              |-+--+
-|  10 Features  |   | Dedupe &  | |  | 15 Trials x 5-Fold |    | |Train - Val| < 5% |    | Minimize:    | |  |
-|  + Churn (0/1)|   | 80/20     | |  | Stratified CV with |    | & within 1% band?  |    | 0.4*Size +   | |  |
-|               |   | Split     | |  | ColumnTransformer  |    | Output: eligible / |    | 0.3*FitTime +| |  |
-+---------------+   |           | |  | LR,DT,RF,HGB,NB,   |    |         overfit    |    | 0.3*Latency  | |  |
-                    | Decision: | |  | SVM,KNN            |    +---------+----------+    |              | |  |
-                    | • Classify| |  +--------------------+              |               | Winner:      | |  |
-                    | • Regress | |            ^                         | audit / gap   | DecisionTree | |  |
-                    +-----+-----+ |            |                         v               | (16KB, 2.2ms)| |  |
-                          |       |            |               +--------------------+    +--------------+ |  |
-                          |       |            |               | (5) Hold-Out Test  |                     |  |
-                          |       |            |               |   (88,167 Records) |                     |  |    +------------------+
-                          |       |            |               |                    |    +--------------+ |  |    | (10) Live App on |
-                          |       |            |               | Unbiased audit on  |    | (6) Verify   | |  +--->|   Cloud / EC2    |
-                          |       |            |               | unseen test split  |--->|   Test Audit | |       |                  |
-                          |       |            |               +--------------------+    |              | |  +--->|  Streamlit UI    |
-                          |       |            |                         ^               | 99.98% Acc   | |  |    |  via Docker &    |
-                          |       |            |                         |               | 0.9999 AUC   | |  |    |  GitHub Actions  |
-                          |       |            |                         |               +------+-------+ |  |    |  (Port 8501)     |
-                          |       |            |                         |                      | pass    |  |    |                  |
-                          |       |            |                         |                      v         |  |    |  ✓ 99.98% Acc    |
-                          |       |            |                         |               +--------------+ |  |    |  ✓ 2.26 ms/row   |
-                          |       |            |                         |               | (8) Docker   | |  |    +------------------+
-                          |       |            |                         |               |   Package    |-+--+             ^
-                          |       |            |                         |               |              | |                |
-                          |       |            |                         |               | app.py +     | |                |
-                          |       |            |                         |               | model.pkl +  | |                |
-                          |       |            |                         |               | requirements | |                |
-                          |       |            |                         |               +--------------+ |                |
-                          |       |            |                         |                                |                |
-                          |       |            |               +---------+------------------------------+ |                |
-                          |       |            |               | (9) Fallback & Dynamic Regression Mode | |                |
-                          +-------+------------+-------------->|   Selects smallest-gap fallback or     |-+----------------+
-                        Regression / Fallback  |               |   routes continuous target to 6 models | |
-                                               |               +----------------------------------------+ |
-                                               |                                     ^                    |
-                                               +-------------------------------------|--------------------+
-                                               |                                     |
-+----------------------------------------------+--------------+    +-----------------+--------------------+
-|        DVC DATA PIPELINE & ARTIFACT LINEAGE (Zero Leak)     |    |   EXPERIMENT TRACKING & REGISTRY     |
-|                                                             |    |                                      |
-|  [Raw CSV] ---> [Dedupe & Split] ---> [ColumnTransformer]   |    |            MLFLOW DASHBOARD          |
-|  440,832 rows    80/20 Stratify        Standard/MinMax      |    |   105 Nested Optuna Runs, Metrics,   |
-|  12 columns      352.6K / 88.1K        + OneHotEncoder      |    |   Cloudpickle model.pkl & reqs.txt   |
-|                        |                                    |    +--------------------------------------+
-|                        +---> [DVC Lock & Cache (dvc.lock)]  |
-+-------------------------------------------------------------+
-
-  [GOAL]: Always enforce zero data leakage and < 5.0% train-val gap first. Among top accuracy finalists (within 1.0%),
-          select the fastest, smallest champion (DecisionTree: 16 KB, 99.98% test accuracy) and deploy via Docker.
-========================================================================================================================
-```
+![End-to-End Customer Churn MLOps Architecture](assets/architecture.png)
 
 ---
 
@@ -146,6 +83,9 @@ customer-churn-mlops/
 ├── .dvc/                              # DVC configuration & tracking metadata
 ├── .github/workflows/
 │   └── deploy.yml                     # CI/CD: Build Docker -> Push AWS ECR -> Deploy AWS EC2
+├── assets/
+│   ├── architecture.png               # High-DPI Retina Architecture Diagram
+│   └── architecture.svg               # Vector SVG Architecture Diagram
 ├── data/
 │   ├── raw/customer_churn.csv         # 440,833 raw customer records
 │   ├── ingested/churn.csv             # Schema-validated & cleaned dataset (440,832 rows)
